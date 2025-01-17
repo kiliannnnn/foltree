@@ -1,15 +1,22 @@
 # Foltree
 
 Foltree is a small program I made with python that aims to help me writing folders structure for the readme files of my projects instead of doing it manually or with AI. It can also do the other way job, convert structure given by AI tools into real folders.
+***The program is working well but no security were added, avoid giving an enormous folder to the tool.***
 
-To start the program, either use python
+## Usage
+
+To start the program, either use python or double click the .exe program located inside the dist folder
+
+### Python (recommended)
+Only the file named FoltreeGUI.py and located in the root is required
 ```python
 python .\FoltreeGUI.py
 ```
-Or double click the .exe program located inside the dist
-***I experienced some problems using the executable version, you might use the python version for more stability***
 
-***The program is working well but no security were added, avoid giving an enormous folder to the tool.***
+### Executable (Not stable)
+Run the executable file in the dist folder
+
+***I experienced some problems using the executable version, you might use the python version for more stability***
 
 ## File structure
 
