@@ -1,58 +1,76 @@
 import os
 import tkinter as tk
-from tkinter import filedialog, ttk
+import customtkinter as ctk
+from CTkToolTip import *
+from tkinter import filedialog
 import time
 import random
 
-class ToolTip:
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip_window = None
-        widget.bind("<Enter>", self.show_tooltip)
-        widget.bind("<Leave>", self.hide_tooltip)
-
-    def show_tooltip(self, event):
-        if self.tooltip_window or not self.text:
-            return
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
-        self.tooltip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "8", "normal"))
-        label.pack(ipadx=1)
-
-    def hide_tooltip(self, event):
-        tw = self.tooltip_window
-        self.tooltip_window = None
-        if tw:
-            tw.destroy()
-
 def folder_to_text(folder_path, format_type):
+    ignore_patterns = get_ignore_patterns()
+
+    if format_type == "Indented":
+        return generate_indented_format(folder_path, ignore_patterns)
+    elif format_type == "Tree":
+        return generate_tree_format(folder_path, ignore_patterns)
+    elif format_type == "Clean Tree":
+        return generate_clean_tree_format(folder_path, ignore_patterns)
+    else:
+        raise ValueError("Invalid format type. Choose 'Indented', 'Tree', or 'Clean Tree'.")
+
+def generate_indented_format(folder_path, ignore_patterns):
     folder_structure = []
     for root, dirs, files in os.walk(folder_path):
+        if should_ignore(root, ignore_patterns):
+            continue
         level = root.replace(folder_path, '').count(os.sep)
-        if format_type == "Indented":
-            indent = ' ' * 4 * level
-            folder_structure.append(f'{indent}{os.path.basename(root)}/')
-            sub_indent = ' ' * 4 * (level + 1)
-            for f in files:
-                folder_structure.append(f'{sub_indent}{f}')
-        elif format_type == "Tree":
-            indent = '│   ' * level
-            folder_structure.append(f'{indent}├── {os.path.basename(root)}')
-            sub_indent = '│   ' * (level + 1)
-            for f in files:
-                folder_structure.append(f'{sub_indent}├── {f}')
+        indent = ' ' * 4 * level
+        folder_structure.append(f'{indent}{os.path.basename(root)}/')
+        sub_indent = ' ' * 4 * (level + 1)
+        for f in files:
+            if should_ignore(os.path.join(root, f), ignore_patterns):
+                continue
+            folder_structure.append(f'{sub_indent}{f}')
     return '\n'.join(folder_structure)
+
+def generate_tree_format(folder_path, ignore_patterns):
+    folder_structure = []
+    for root, dirs, files in os.walk(folder_path):
+        if should_ignore(root, ignore_patterns):
+            continue
+        level = root.replace(folder_path, '').count(os.sep)
+        indent = '│   ' * level
+        folder_structure.append(f'{indent}├── {os.path.basename(root)}')
+        sub_indent = '│   ' * (level + 1)
+        for f in files:
+            if should_ignore(os.path.join(root, f), ignore_patterns):
+                continue
+            folder_structure.append(f'{sub_indent}├── {f}')
+    return '\n'.join(folder_structure)
+
+def generate_clean_tree_format(folder_path, ignore_patterns):
+    folder_structure = []
+    def process_folder(root, prefix="", is_last=False):
+        entries = sorted(os.listdir(root))
+        entries = [e for e in entries if not should_ignore(os.path.join(root, e), ignore_patterns)]
+        dirs = [e for e in entries if os.path.isdir(os.path.join(root, e))]
+        files = [e for e in entries if os.path.isfile(os.path.join(root, e))]
+        connector = "└── " if is_last else "├── "
+        folder_structure.append(f"{prefix}{connector}{os.path.basename(root)}")
+        sub_prefix = prefix + ("    " if is_last else "│   ")
+        for index, entry in enumerate(dirs):
+            is_last_entry = index == len(dirs) - 1 and not files
+            process_folder(os.path.join(root, entry), sub_prefix, is_last_entry)
+        for index, entry in enumerate(files):
+            file_connector = "└── " if index == len(files) - 1 else "├── "
+            folder_structure.append(f"{sub_prefix}{file_connector}{entry}")
+    process_folder(folder_path, "", True)
+    return "\n".join(folder_structure)
 
 def text_to_folder(text, output_path, format_type):
     lines = text.split('\n')
     current_path = [output_path]
+    ignore_patterns = get_ignore_patterns()
     for line in lines:
         if format_type == "Indented":
             indent_level = len(line) - len(line.lstrip(' '))
@@ -60,21 +78,25 @@ def text_to_folder(text, output_path, format_type):
         elif format_type == "Tree":
             indent_level = line.count('│   ')
             level = indent_level
+        elif format_type == "Clean Tree":
+            indent_level = line.count('    ')
+            level = indent_level
         while len(current_path) > level + 1:
             current_path.pop()
         if format_type == "Indented":
             path = os.path.join(*current_path, line.strip())
-        elif format_type == "Tree":
-            item_name = line.strip().replace('├── ', '').replace('└── ', '').replace('│   ', '')
+        elif format_type == "Tree" or format_type == "Clean Tree":
+            item_name = line.strip().replace('├── ', '').replace('└── ', '').replace('│   ', '').replace('    ', '')
             path = os.path.join(*current_path, item_name)
-        if format_type == "Tree" and '.' not in item_name:
+        if should_ignore(path, ignore_patterns):
+            continue
+        if format_type in ["Tree", "Clean Tree"] and '.' not in item_name:
             os.makedirs(path, exist_ok=True)
             current_path.append(path)
         elif format_type == "Indented" and line.strip().endswith('/'):
             os.makedirs(path, exist_ok=True)
             current_path.append(path)
         else:
-            # Ensure the directory exists before creating the file
             dir_path = os.path.dirname(path)
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -86,18 +108,19 @@ def select_folder():
         global folder_structures
         folder_structures = {
             "Indented": folder_to_text(folder_path, "Indented"),
-            "Tree": folder_to_text(folder_path, "Tree")
+            "Tree": folder_to_text(folder_path, "Tree"),
+            "Clean Tree": folder_to_text(folder_path, "Clean Tree")
         }
         display_selected_format()
 
 def display_selected_format():
     format_type = format_var.get()
-    text_box.delete(1.0, tk.END)
-    text_box.insert(tk.END, folder_structures[format_type])
+    text_box.delete(1.0, ctk.END)
+    text_box.insert(ctk.END, folder_structures[format_type])
 
 def generate_folder():
     global folder_structures
-    text = text_box.get(1.0, tk.END).strip()
+    text = text_box.get(1.0, ctk.END).strip()
     format_type = format_var.get()
     if use_output_folder.get():
         output_path = os.path.join(os.path.dirname(__file__), 'output')
@@ -112,7 +135,6 @@ def generate_folder():
             return
     text_to_folder(text, output_path, format_type)
     
-    # Create README.md file with UTF-8 encoding
     readme_path = os.path.join(output_path, "README.md")
     with open(readme_path, 'w', encoding='utf-8') as readme_file:
         readme_file.write("# Foltree\n\n")
@@ -124,73 +146,94 @@ def generate_folder():
         readme_file.write(folder_structures[format_type])
         readme_file.write("\n```\n")
     
-    # Update the status message
     status_var.set("Folder structure generated successfully.")
 
 def on_format_change(*args):
     display_selected_format()
 
-# Create the main window
-root = tk.Tk()
-root.title("Folder Structure Generator")
-root.geometry("600x500")
+def get_ignore_patterns():
+    patterns = ignore_text.get(1.0, ctk.END).strip().split('\n')
+    return [pattern.strip() for pattern in patterns if pattern.strip()]
+
+def should_ignore(path, ignore_patterns):
+    for pattern in ignore_patterns:
+        if pattern in path:
+            return True
+    return False
+
+root = ctk.CTk()
+root.title("Foltree")
+root.geometry("400x600")
 
 # Define the status variable
-status_var = tk.StringVar(value="Status: Ready")
+status_var = ctk.StringVar(value="Status: Ready")
 
 # Create a label to display the status
-status_label = ttk.Label(root, textvariable=status_var, foreground="green", font=("Arial", 10))
-status_label.pack(pady=10)
+status_label = ctk.CTkLabel(root, textvariable=status_var, fg_color=("white", "gray"), font=("Arial", 10))
+status_label.grid(row=0, column=0, columnspan=2, pady=10)
 
 # Create a frame for the text box and scrollbar
-text_frame = ttk.Frame(root, padding="10")
-text_frame.pack(fill=tk.BOTH, expand=True)
+text_frame = ctk.CTkFrame(root)
+text_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 
 # Create a Text widget with a scrollbar
-text_box = tk.Text(text_frame, wrap='word', width=50, height=15)
-text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+text_box = ctk.CTkTextbox(text_frame, wrap='word', width=50, height=15)
+text_box.pack(side=ctk.LEFT, fill=ctk.BOTH, expand=True)
 
-scrollbar = ttk.Scrollbar(text_frame, command=text_box.yview)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-text_box.config(yscrollcommand=scrollbar.set)
+scrollbar = ctk.CTkScrollbar(text_frame, command=text_box.yview)
+scrollbar.pack(side=ctk.RIGHT, fill=ctk.Y)
+text_box.configure(yscrollcommand=scrollbar.set)
 
 # Create a frame for the options
-options_frame = ttk.Frame(root, padding="10")
-options_frame.pack(fill=tk.X)
+options_frame = ctk.CTkFrame(root)
+options_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
 # Create a Checkbutton widget
-use_output_folder = tk.BooleanVar()
-output_folder_checkbox = ttk.Checkbutton(options_frame, text="Use 'output' folder", variable=use_output_folder)
-output_folder_checkbox.pack(side=tk.LEFT, padx=5, pady=5)
+use_output_folder = ctk.BooleanVar()
+output_folder_checkbox = ctk.CTkCheckBox(options_frame, text="Use 'output' folder", variable=use_output_folder)
+output_folder_checkbox.grid(row=0, column=0, padx=5, pady=5, sticky="w")
 
-# Add a tooltip to the Checkbutton
-ToolTip(output_folder_checkbox, "If checked, the result will be saved in an 'output' folder with a unique name. If unchecked, you will be prompted to select a folder.")
+# Create a tooltip for the checkbox with a small delay and some custom styling
+tooltip_checkbox = CTkToolTip(
+    output_folder_checkbox,
+    alpha= 0.9,
+    message="If checked, the result will be saved in an 'output' folder with a unique name. If unchecked, you will be prompted to select a folder."
+)
 
-# Create a dropdown menu to select format
-format_var = tk.StringVar(value="Indented")
+# Create a dropdown menu to select format under the checkbox
+format_var = ctk.StringVar(value="Indented")
 format_var.trace('w', on_format_change)
-format_label = ttk.Label(options_frame, text="Select Format:")
-format_label.pack(side=tk.LEFT, padx=5, pady=5)
-format_dropdown = tk.OptionMenu(options_frame, format_var, "Indented", "Tree")
-format_dropdown.pack(side=tk.LEFT, padx=5, pady=5)
+format_dropdown = ctk.CTkOptionMenu(options_frame, variable=format_var, values=["Indented", "Tree", "Clean Tree"])
+format_dropdown.grid(row=2, column=0, padx=5, pady=5, sticky="w")
 
-# Create a frame for the buttons
-button_frame = ttk.Frame(root, padding="10")
-button_frame.pack(fill=tk.X)
+# Create ignore_text input that takes the entire width and more height with default values
+ignore_text = ctk.CTkTextbox(root, height=10, width=60)
+ignore_text.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
 
-# Create a Button widget to generate folder structure
-generate_button = ttk.Button(button_frame, text="Generate Folder Structure", command=generate_folder)
-generate_button.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.X)
+# Add default values inside the ignore_text box
+ignore_text.insert(1.0, ".git\nnode_modules\ndist\n.vscode\n.env\n.env.local\n")
 
-# Create a Button widget to select folder and translate to text
-select_folder_button = ttk.Button(button_frame, text="Load Folder Structure", command=select_folder)
-select_folder_button.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.X)
+# Create buttons
+button_frame = ctk.CTkFrame(root)
+button_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
-# Initialize the folder_structures variable
+generate_button = ctk.CTkButton(button_frame, text="Generate Folder", command=generate_folder)
+generate_button.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+
+select_folder_button = ctk.CTkButton(button_frame, text="Select Folder", command=select_folder)
+select_folder_button.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
+# Configure grid weights to make the layout responsive
+root.grid_columnconfigure(0, weight=1)
+root.grid_columnconfigure(1, weight=1)
+root.grid_rowconfigure(1, weight=1)
+root.grid_rowconfigure(2, weight=1)
+
 folder_structures = {
-    "Indented": "",
-    "Tree": ""
+    "Indented": "Some folder structure for Indented",
+    "Tree": "Some folder structure for Tree",
+    "Clean Tree": "Some folder structure for Clean Tree"
 }
 
-# Start the main event loop
+# Start the Tkinter main loop
 root.mainloop()
