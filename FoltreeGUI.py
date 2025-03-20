@@ -1,10 +1,9 @@
 import os
-import tkinter as tk
-import customtkinter as ctk
-from CTkToolTip import *
-from tkinter import filedialog
 import time
 import random
+
+import customtkinter as ctk
+from CTkToolTip import *
 
 def folder_to_text(folder_path, format_type):
     ignore_patterns = get_ignore_patterns()
@@ -103,7 +102,7 @@ def text_to_folder(text, output_path, format_type):
             open(path, 'w').close()
 
 def select_folder():
-    folder_path = filedialog.askdirectory()
+    folder_path = ctk.filedialog.askdirectory()
     if folder_path:
         global folder_structures
         folder_structures = {
@@ -145,8 +144,6 @@ def generate_folder():
         readme_file.write("```\n")
         readme_file.write(folder_structures[format_type])
         readme_file.write("\n```\n")
-    
-    status_var.set("Folder structure generated successfully.")
 
 def on_format_change(*args):
     display_selected_format()
@@ -164,13 +161,6 @@ def should_ignore(path, ignore_patterns):
 root = ctk.CTk()
 root.title("Foltree")
 root.geometry("400x600")
-
-# Define the status variable
-status_var = ctk.StringVar(value="Status: Ready")
-
-# Create a label to display the status
-status_label = ctk.CTkLabel(root, textvariable=status_var, fg_color=("white", "gray"), font=("Arial", 10))
-status_label.grid(row=0, column=0, columnspan=2, pady=10)
 
 # Create a frame for the text box and scrollbar
 text_frame = ctk.CTkFrame(root)
@@ -211,7 +201,7 @@ ignore_text = ctk.CTkTextbox(root, height=10, width=60)
 ignore_text.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
 
 # Add default values inside the ignore_text box
-ignore_text.insert(1.0, ".git\nnode_modules\ndist\n.vscode\n.env\n.env.local\n")
+ignore_text.insert(1.0, ".git\nnode_modules\ndist\n.vscode\n.env\n.env.local\nvendor\n")
 
 # Create buttons
 button_frame = ctk.CTkFrame(root)
@@ -230,9 +220,9 @@ root.grid_rowconfigure(1, weight=1)
 root.grid_rowconfigure(2, weight=1)
 
 folder_structures = {
-    "Indented": "Some folder structure for Indented",
-    "Tree": "Some folder structure for Tree",
-    "Clean Tree": "Some folder structure for Clean Tree"
+    "Indented": "",
+    "Tree": "",
+    "Clean Tree": ""
 }
 
 # Start the Tkinter main loop
