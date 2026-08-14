@@ -1,86 +1,152 @@
 # 🌳 Foltree
 
-Foltree is a Python-based utility that helps you manage folder structures for your projects. It can:
-- 📝 Generate folder structure documentation for README files
-- 🔄 Convert AI-generated structures into actual folders
-- 🎨 Provide a user-friendly GUI interface
+Turn folders into text, and text back into folders.
 
-> ⚠️ **Note**: Large structures may take a while to parse or might fail
-> 
-> 🐍 **Tested with**: Python 3.13.1
+- 📝 Document a project's structure for a README
+- 🔄 Turn an AI-generated or hand-written structure into real folders and files
+- 🎨 Desktop app, plus a CLI for scripts and CI
 
-## ✨ Features
-
-- 🖥️ Modern GUI interface using CustomTkinter
-- 📂 Convert between folder structures and documentation
-- 🔄 Bidirectional conversion (text to folders and folders to text)
-- 🎯 Simple and intuitive user interface
-
-## 🚀 Installation
-
-### Prerequisites
-
-- Python 3.13.1 or higher
-- pip (Python package installer)
-
-### Step 1: Create a Virtual Environment (Recommended)
-
-```bash
-# Windows
-python -m venv venv
-.\venv\Scripts\activate
-
-# Linux/MacOS
-python3 -m venv venv
-source venv/bin/activate
+```
+myapp/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── src/
+│   ├── components/
+│   │   └── Button.tsx
+│   └── main.ts
+├── assets/
+├── Dockerfile
+└── README.md
 ```
 
-### Step 2: Install Dependencies
+## 🚀 Quick start
+
+**Windows** — double-click `run.bat`.
+**macOS / Linux** — run `./run.sh` (`chmod +x run.sh` once).
+
+The first launch builds a virtual environment and installs the dependencies;
+after that it opens straight away. There is nothing to activate and no command
+to remember.
+
+Prefer to install it properly?
 
 ```bash
-
-# install from requirements.txt
-pip install -r requirements.txt
-
-# Or using pip
-pip install customtkinter CTkToolTip
+pip install -e .
+foltree            # opens the app
+foltree scan .     # or use the CLI
 ```
 
-## 🎮 Usage
+Requires Python 3.9 or newer. On Linux the GUI also needs Tk:
+`sudo apt install python3-tk`.
 
-### Running with Python (Recommended)
+## 🖥️ The app
 
-1. Navigate to the project directory
-2. Run the GUI application:
-   ```bash
-   python FoltreeGUI.py
-   ```
+| | |
+|---|---|
+| **Select Folder** | scan a folder and show its structure |
+| **Format** | switch between formats — your edits are converted, not lost |
+| **Max depth** | stop after N levels; deeper content is marked `...` |
+| **Show sizes & counts** | file sizes, plus per-folder file counts and totals |
+| **Respect .gitignore** | apply the scanned folder's own `.gitignore` on top of your patterns |
+| **Ignore patterns** | one per line, gitignore syntax |
+| **Copy / Save as…** | to the clipboard, or to `.txt` / `.md` / `.json` / `.yaml` |
+| **Create Folders** | build whatever is in the editor, after a confirmation showing the counts |
 
-### Building Executable (Optional)
+Shortcuts: `Ctrl+O` open · `F5` rescan · `Ctrl+S` save · `Ctrl+Shift+C` copy ·
+`Ctrl+Enter` create.
 
-Maybe later
+Scanning runs on a background thread, so large folders no longer freeze the
+window.
+
+## ⌨️ CLI
+
+```bash
+# Print a structure
+foltree scan .
+foltree scan ~/code/myapp -f markdown -o structure.md
+foltree scan . --max-depth 2 --sizes --summary
+foltree scan . --gitignore -i "*.log" -i "tmp/"
+
+# Create folders from a structure
+foltree build -i structure.txt -o ./scaffold
+cat structure.md | foltree build -o ./scaffold
+foltree build -i structure.txt -o ./scaffold --dry-run   # preview only
+```
+
+`scan` writes to stdout, so it pipes: `foltree scan . | pbcopy`.
+
+### Formats
+
+`indented`, `tree`, `ascii`, `markdown`, `json`, `yaml` — every one of them
+round-trips, so you can scan in one format and build from another. `build`
+auto-detects the input format unless you pass `-f`.
+
+### Ignore patterns
+
+Full gitignore syntax: `*.log`, `build/`, `/only-at-root`, `**/tmp`, and `!keep.log`
+to re-include. A bare name like `dist` matches a whole path segment, so it no
+longer catches `distribution`.
 
 ## 🛠️ Development
 
-### Project Structure
-
 ```
 foltree/
-├── FoltreeGUI.py    # Main application file
-├── README.md        # This documentation
-└── requirements.txt # The project's dependencies
+├── foltree/
+│   ├── node.py      # the shared tree model
+│   ├── ignore.py    # gitignore-style matching
+│   ├── scanner.py   # filesystem -> tree
+│   ├── render.py    # tree -> text
+│   ├── parse.py     # text -> tree
+│   ├── build.py     # tree -> filesystem
+│   ├── cli.py       # command line interface
+│   └── gui.py       # desktop app
+├── tests/
+├── run.sh
+└── run.bat
 ```
 
-## 💡 Future Improvements
+Both directions share one tree model, which is what makes round-tripping
+reliable — the old version parsed and rendered text directly.
 
-- 📋 Copy button for easy structure copying
-- 🔍 Search functionality for large structures
-- 📤 Export/Import functionality
+```bash
+python -m unittest discover -s tests -t .
+```
+
+61 tests, standard library only. The GUI tests skip themselves when no display
+is available.
+
+## 🔁 Upgrading from v2
+
+Everything still works, but a few behaviours changed on purpose:
+
+- **`python FoltreeGUI.py` still runs**, it now forwards to the package.
+- **Ignore patterns are gitignore syntax, not substrings.** `.git` no longer
+  also hides `.gitignore`, and `dist` no longer hides `distribution`.
+- **"Clean Tree" is now just "Tree".** The old "Tree" format emitted `├──` for
+  every entry and mis-nested deep folders; the corrected renderer replaces both.
+- **Directories are written with a trailing `/`.** That is what lets an empty
+  folder survive a round-trip instead of being rebuilt as a file.
+- **Existing files are no longer truncated** when building into a folder that
+  already has content. Pass `--overwrite` if you want the old behaviour.
+
+Fixed along the way: the crash when creating folders without the *output*
+checkbox ticked (`filedialog` was never imported), the README that described
+the scanned folder instead of the structure you typed, ignored folders whose
+children were still listed, `LICENSE` and `Dockerfile` being created as
+directories, `.github` being created as a file, and structures containing `..`
+being able to write outside the output folder.
+
+## 💡 Ideas
+
+- Watch a folder and keep a README section in sync
+- Structure diffing (what changed since last scan)
+- Templates for common project layouts
 
 ## 🤝 Contributing
 
-Feel free to submit issues and enhancement requests!
+Issues and enhancement requests welcome.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT.
