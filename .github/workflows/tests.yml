@@ -1,0 +1,95 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    # The engine is pure standard library, so this job installs nothing and
+    # runs everywhere. The GUI tests skip themselves without a display.
+    name: core (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t . -v
+
+  gui:
+    # Runs the same suite with Tk and a virtual display, so the GUI tests
+    # actually execute instead of skipping.
+    name: gui (xvfb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk and xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb python3-tk
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run tests under a virtual display
+        run: xvfb-run -a -s "-screen 0 1280x900x24" python -m unittest discover -s tests -t . -v
+
+      - name: Fail if the GUI tests were skipped
+        # Without this the job would pass green while silently testing nothing.
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1280x900x24" \
+            python -m unittest tests.test_gui -v 2>&1 | tee "$RUNNER_TEMP/gui.log"
+          if grep -q "skipped" "$RUNNER_TEMP/gui.log"; then
+            echo "::error::GUI tests skipped - Tk or customtkinter is not usable in CI"
+            exit 1
+          fi
+
+  cli:
+    name: cli smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scan and rebuild this repository in every format
+        run: |
+          set -euo pipefail
+          # Everything is written outside the working tree, otherwise each
+          # format's output would show up in the next format's scan.
+          out="$RUNNER_TEMP/foltree-ci"
+          mkdir -p "$out"
+          python -m foltree scan . -f tree -o "$out/baseline.tree"
+
+          for format in indented tree ascii markdown json yaml; do
+            echo "--- $format ---"
+            python -m foltree scan . -f "$format" --summary -o "$out/structure.$format"
+            python -m foltree build -i "$out/structure.$format" -o "$out/rebuilt/$format"
+            # A rebuild of the scan must render identically to the original.
+            python -m foltree scan "$out/rebuilt/$format/$(basename "$PWD")" \
+              -f tree -o "$out/rebuilt.$format.tree"
+            diff "$out/baseline.tree" "$out/rebuilt.$format.tree"
+          done

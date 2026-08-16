@@ -68,6 +68,15 @@ def guess_is_dir(name: str, has_children: bool) -> bool:
         return False
     if name.startswith("."):
         return False
+
+    # ALL-CAPS names are a strong file convention: LICENSE, AUTHORS, PKG-INFO,
+    # CODEOWNERS. Directories are conventionally lowercase.
+    letters = [char for char in name if char.isalpha()]
+    if letters and all(char.isupper() for char in letters):
+        return False
+
+    # Anything left is a bare lowercase word, far more often an empty folder
+    # (assets, components) than an extensionless file.
     return True
 
 

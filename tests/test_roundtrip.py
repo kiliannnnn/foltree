@@ -92,6 +92,18 @@ class TestParseEdgeCases(unittest.TestCase):
         for child in tree.children:
             self.assertFalse(child.is_dir, f"{child.name} should be a file")
 
+    def test_all_caps_names_are_files(self):
+        # PKG-INFO, AUTHORS and friends have no extension and are not in the
+        # known-names list, but ALL-CAPS is a reliable file convention.
+        tree = parse("p/\n├── PKG-INFO\n├── AUTHORS\n└── CODEOWNERS\n")
+        for child in tree.children:
+            self.assertFalse(child.is_dir, f"{child.name} should be a file")
+
+    def test_bare_lowercase_names_are_directories(self):
+        tree = parse("p/\n├── assets\n└── components\n")
+        for child in tree.children:
+            self.assertTrue(child.is_dir, f"{child.name} should be a directory")
+
     def test_dot_directories_stay_directories(self):
         tree = parse("p/\n└── .github/\n    └── workflows/\n        └── ci.yml\n")
         github = tree.children[0]
