@@ -1,13 +1,21 @@
 name: tests
 
 on:
+  # Only the default branch runs on push. Everything else is covered by the
+  # pull_request event -- listening to both would run every job twice on any
+  # branch that has a PR open.
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A new push supersedes whatever is still running for the same PR or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   core:
