@@ -49,6 +49,8 @@ Requires Python 3.9 or newer. On Linux the GUI also needs Tk:
 | **Max depth** | stop after N levels; deeper content is marked `...` |
 | **Show sizes & counts** | file sizes, plus per-folder file counts and totals |
 | **Respect .gitignore** | apply the scanned folder's own `.gitignore` on top of your patterns |
+| **Mark folders with /** | the trailing slash on directories — see below |
+| **Bare names are** | how to read a name with no slash, extension or children |
 | **Ignore patterns** | one per line, gitignore syntax |
 | **Copy / Save as…** | to the clipboard, or to `.txt` / `.md` / `.json` / `.yaml` |
 | **Create Folders** | build whatever is in the editor, after a confirmation showing the counts |
@@ -78,9 +80,41 @@ foltree build -i structure.txt -o ./scaffold --dry-run   # preview only
 
 ### Formats
 
-`indented`, `tree`, `ascii`, `markdown`, `json`, `yaml` — every one of them
-round-trips, so you can scan in one format and build from another. `build`
+`indented`, `tree`, `clean`, `ascii`, `markdown`, `json`, `yaml` — every one of
+them round-trips, so you can scan in one format and build from another. `build`
 auto-detects the input format unless you pass `-f`.
+
+`clean` is `tree` without the vertical guide bars — a lighter look for pasting
+into documents. Indentation still encodes depth, so it parses back identically.
+
+```
+tree                        clean
+────                        ─────
+myapp/                      myapp/
+├── src/                    ├── src/
+│   └── main.ts                 └── main.ts
+└── README.md               └── README.md
+```
+
+### Telling files from folders
+
+Foltree writes a trailing `/` on directories, which is what lets an empty
+folder survive a round-trip — without it, `assets` is indistinguishable from an
+extensionless file. Turn it off with `--no-trailing-slash` (or the
+**Mark folders with /** switch) if you prefer the plainer look.
+
+When a name arrives with no slash, no extension, no children and no recognised
+meaning, `--bare-names` decides how to read it:
+
+```bash
+foltree build -i structure.txt -o ./out --bare-names folder   # default
+foltree build -i structure.txt -o ./out --bare-names file
+```
+
+Stronger evidence always wins over the setting: a trailing `/`, having
+children, or a known name like `.github`, `LICENSE` or `Dockerfile` is decided
+before it applies. JSON is unaffected either way — it records the type on every
+entry, so it is the one format that is always lossless.
 
 ### Ignore patterns
 
@@ -113,8 +147,9 @@ reliable — the old version parsed and rendered text directly.
 python -m unittest discover -s tests -t .
 ```
 
-61 tests, standard library only. The GUI tests skip themselves when no display
-is available.
+83 tests, standard library only. The GUI tests skip themselves when no display
+is available; CI runs them for real under Xvfb and fails if they report as
+skipped, so a broken Tk cannot leave the job silently green.
 
 ## 🔁 Upgrading from v2
 
@@ -123,10 +158,12 @@ Everything still works, but a few behaviours changed on purpose:
 - **`python FoltreeGUI.py` still runs**, it now forwards to the package.
 - **Ignore patterns are gitignore syntax, not substrings.** `.git` no longer
   also hides `.gitignore`, and `dist` no longer hides `distribution`.
-- **"Clean Tree" is now just "Tree".** The old "Tree" format emitted `├──` for
-  every entry and mis-nested deep folders; the corrected renderer replaces both.
-- **Directories are written with a trailing `/`.** That is what lets an empty
-  folder survive a round-trip instead of being rebuilt as a file.
+- **"Clean Tree" is still there**, as the guide-bar-free style described above.
+  The old "Tree" emitted `├──` for every entry and mis-nested deep folders;
+  "Tree" is now the corrected renderer.
+- **Directories are written with a trailing `/`** by default, which is what
+  lets an empty folder survive a round-trip. Turn it off with
+  `--no-trailing-slash` if you prefer the old plainer output.
 - **Existing files are no longer truncated** when building into a folder that
   already has content. Pass `--overwrite` if you want the old behaviour.
 

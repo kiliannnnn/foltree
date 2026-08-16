@@ -14,7 +14,7 @@ from .node import Node
 from .ignore import IgnoreRules, load_gitignore, DEFAULT_IGNORE
 from .scanner import scan, ScanError
 from .render import render, FORMATS, format_size
-from .parse import parse, detect_format, ParseError
+from .parse import parse, detect_format, guess_is_dir, BARE_NAMES, ParseError
 from .build import build, BuildError, plan
 
 __version__ = "3.0.0"
@@ -31,6 +31,8 @@ __all__ = [
     "format_size",
     "parse",
     "detect_format",
+    "guess_is_dir",
+    "BARE_NAMES",
     "ParseError",
     "build",
     "BuildError",

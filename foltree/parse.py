@@ -52,8 +52,22 @@ def _is_noise(name: str) -> bool:
     return not name or name.strip(" .'\"") == "" or name.strip("'\"") == TRUNCATED_MARK
 
 
-def guess_is_dir(name: str, has_children: bool) -> bool:
-    """Best-effort file/directory classification for a bare name."""
+#: What to do with a name that carries no evidence either way -- no trailing
+#: slash, no children, no extension, not a name we recognise. "folder" and
+#: "file" pick the fallback; there is no universally right answer, which is
+#: why it is a setting rather than a hardcoded guess.
+BARE_NAMES = ("folder", "file")
+
+
+def guess_is_dir(name: str, has_children: bool, bare_names: str = "folder") -> bool:
+    """Best-effort file/directory classification for a bare name.
+
+    Evidence is applied strongest first, so `bare_names` only decides cases
+    where nothing else in the name says anything.
+    """
+    if bare_names not in BARE_NAMES:
+        raise ValueError(f"bare_names must be one of {BARE_NAMES}, got {bare_names!r}")
+
     if name.endswith("/"):
         return True
     if has_children:
@@ -75,9 +89,10 @@ def guess_is_dir(name: str, has_children: bool) -> bool:
     if letters and all(char.isupper() for char in letters):
         return False
 
-    # Anything left is a bare lowercase word, far more often an empty folder
-    # (assets, components) than an extensionless file.
-    return True
+    # Anything left is a bare lowercase word with nothing to go on. By default
+    # that reads as an empty folder (assets, components) rather than an
+    # extensionless file.
+    return bare_names == "folder"
 
 
 # --------------------------------------------------------------------------
@@ -190,7 +205,7 @@ def _yaml_pairs(lines: Sequence[str]) -> List[Tuple[int, str]]:
 # Assembly
 # --------------------------------------------------------------------------
 
-def _build_from_pairs(pairs: Sequence[Tuple[int, str]]) -> Node:
+def _build_from_pairs(pairs: Sequence[Tuple[int, str]], bare_names: str = "folder") -> Node:
     pairs = [(depth, name) for depth, name in pairs if not _is_noise(name)]
     if not pairs:
         raise ParseError("No entries found in the structure.")
@@ -216,7 +231,9 @@ def _build_from_pairs(pairs: Sequence[Tuple[int, str]]) -> Node:
     for node in root.walk():
         if node is root:
             continue
-        node.is_dir = guess_is_dir(node.name + ("/" if node.is_dir else ""), bool(node.children))
+        node.is_dir = guess_is_dir(
+            node.name + ("/" if node.is_dir else ""), bool(node.children), bare_names
+        )
 
     # A single top-level entry is the real root; several means the text held a
     # fragment, so keep the anonymous wrapper for build() to unpack.
@@ -225,8 +242,12 @@ def _build_from_pairs(pairs: Sequence[Tuple[int, str]]) -> Node:
     return root
 
 
-def parse(text: str, fmt: str = "auto") -> Node:
-    """Parse `text` into a Node tree. `fmt='auto'` detects the format."""
+def parse(text: str, fmt: str = "auto", bare_names: str = "folder") -> Node:
+    """Parse `text` into a Node tree.
+
+    `fmt='auto'` detects the format. `bare_names` decides how to read a name
+    that gives no clue whether it is a file or a folder -- see BARE_NAMES.
+    """
     if not text or not text.strip():
         raise ParseError("Nothing to parse.")
 
@@ -252,7 +273,9 @@ def parse(text: str, fmt: str = "auto") -> Node:
             raise ParseError(f"Missing key in JSON structure: {exc}") from exc
 
     lines = [line for line in text.splitlines() if line.strip()]
-    if key == "tree" or key == "ascii":
+    if key in ("tree", "clean", "ascii"):
+        # All three differ only in which glyphs fill the prefix columns, and
+        # depth comes from the connector's position, not the glyphs.
         pairs = _tree_pairs(lines)
     elif key == "markdown":
         pairs = _markdown_pairs(lines)
@@ -263,4 +286,4 @@ def parse(text: str, fmt: str = "auto") -> Node:
     else:
         raise ParseError(f"Cannot parse format {key!r}.")
 
-    return _build_from_pairs(pairs)
+    return _build_from_pairs(pairs, bare_names)

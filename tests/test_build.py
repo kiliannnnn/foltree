@@ -108,7 +108,7 @@ class TestFullCycle(BuildTestCase):
                 handle.write("x")
 
         original = scan(source)
-        for fmt in ("indented", "tree", "ascii", "markdown", "json", "yaml"):
+        for fmt in ("indented", "tree", "clean", "ascii", "markdown", "json", "yaml"):
             with self.subTest(format=fmt):
                 dest = tempfile.mkdtemp(prefix=f"foltree-{fmt}-")
                 self.addCleanup(shutil.rmtree, dest, True)

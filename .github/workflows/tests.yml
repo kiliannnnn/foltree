@@ -92,7 +92,7 @@ jobs:
           mkdir -p "$out"
           python -m foltree scan . -f tree -o "$out/baseline.tree"
 
-          for format in indented tree ascii markdown json yaml; do
+          for format in indented tree clean ascii markdown json yaml; do
             echo "--- $format ---"
             python -m foltree scan . -f "$format" --summary -o "$out/structure.$format"
             python -m foltree build -i "$out/structure.$format" -o "$out/rebuilt/$format"

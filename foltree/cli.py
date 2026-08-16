@@ -11,7 +11,7 @@ from . import __version__
 from .build import BuildError, build
 from .ignore import DEFAULT_IGNORE, IgnoreRules
 from .node import Node
-from .parse import ParseError, parse
+from .parse import BARE_NAMES, ParseError, parse
 from .render import FORMATS, format_size, render, resolve_format
 from .scanner import ScanError, scan
 
@@ -73,7 +73,10 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    _write_out(render(tree, args.format, stats=args.sizes), args.output)
+    _write_out(
+        render(tree, args.format, stats=args.sizes, dir_suffix=not args.no_trailing_slash),
+        args.output,
+    )
     if args.summary:
         print(
             f"{tree.dir_count} directories, {tree.file_count} files"
@@ -98,7 +101,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         text = sys.stdin.read()
 
     try:
-        tree = parse(text, args.format)
+        tree = parse(text, args.format, bare_names=args.bare_names)
     except ParseError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -168,6 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--gitignore", action="store_true", help="also apply the folder's .gitignore")
     scan_parser.add_argument("--follow-symlinks", action="store_true", help="descend into symlinked folders")
     scan_parser.add_argument("--summary", action="store_true", help="print a totals line to stderr")
+    scan_parser.add_argument("--no-trailing-slash", action="store_true",
+                             help="do not mark directories with a trailing / "
+                                  "(plainer, but empty folders no longer round-trip)")
     _add_ignore_options(scan_parser)
     scan_parser.set_defaults(func=cmd_scan)
 
@@ -180,6 +186,9 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser_.add_argument("--dry-run", action="store_true", help="list what would be created")
     build_parser_.add_argument("--overwrite", action="store_true", help="truncate files that already exist")
     build_parser_.add_argument("--readme", action="store_true", help="write a README.md describing the structure")
+    build_parser_.add_argument("--bare-names", default="folder", choices=list(BARE_NAMES),
+                               help="how to read a name with no slash, extension or children, "
+                                    "such as 'assets' (default: folder)")
     build_parser_.add_argument("--ignore", action="append", metavar="PATTERN",
                                help="gitignore-style pattern to skip (repeatable)")
     build_parser_.add_argument("--no-default-ignore", action="store_true",

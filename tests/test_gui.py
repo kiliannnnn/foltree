@@ -132,6 +132,87 @@ class TestFoltreeApp(unittest.TestCase):
         self.app.clear_editor()
         self.assertEqual(self.app._editor_text(), "")
 
+    def test_clean_tree_is_offered_and_renders_without_guides(self):
+        self._scan_and_wait()
+        self.assertIn("Clean Tree", FORMAT_LABELS)
+        self.app.format_var.set("Clean Tree")
+        self.app.update()
+        text = self.app._editor_text()
+        self.assertIn("└── ", text)
+        self.assertNotIn("│", text)
+
+    def test_trailing_slash_toggle_updates_the_editor(self):
+        self._scan_and_wait()
+        self.assertIn("src/", self.app._editor_text())
+
+        self.app.dir_suffix_var.set(False)
+        self.app._refresh_editor()
+        self.app.update()
+        self.assertNotIn("src/", self.app._editor_text())
+        self.assertIn("src", self.app._editor_text())
+
+        self.app.dir_suffix_var.set(True)
+        self.app._refresh_editor()
+        self.app.update()
+        self.assertIn("src/", self.app._editor_text())
+
+    def test_bare_names_setting_reaches_the_parser(self):
+        self.app._set_editor("proj/\n├── assets\n└── main.py\n")
+
+        self.app.bare_names_var.set("Folders")
+        self.assertTrue(self.app._parse(self.app._editor_text()).children[0].is_dir)
+
+        self.app.bare_names_var.set("Files")
+        self.assertFalse(self.app._parse(self.app._editor_text()).children[0].is_dir)
+
+    def test_bare_names_setting_changes_what_gets_built(self):
+        destination = os.path.join(self.workdir, "bare")
+        os.makedirs(destination)
+        self.app._set_editor("proj/\n└── assets\n")
+        self.app._destination = lambda: destination
+        self.app._offer_to_open = lambda path: None
+
+        from tkinter import messagebox
+
+        original = messagebox.askokcancel
+        messagebox.askokcancel = lambda *a, **k: True
+        self.addCleanup(lambda: setattr(messagebox, "askokcancel", original))
+
+        self.app.bare_names_var.set("Files")
+        self.app.create_folders()
+        self.assertTrue(os.path.isfile(os.path.join(destination, "proj", "assets")))
+
+
+@unittest.skipUnless(GUI_AVAILABLE, GUI_SKIP_REASON)
+class TestTeardown(unittest.TestCase):
+    def test_destroy_cancels_every_pending_timer(self):
+        """Guards the "invalid command name ...<lambda>" noise on shutdown.
+
+        CTkTextbox re-arms a scrollbar check every few milliseconds and
+        ScalingTracker polls for DPI changes, so something is always pending.
+        Cancelling only our own drain timer left theirs to fire into destroyed
+        widgets, so destroy() has to clear the whole `after info` list.
+        """
+        app = FoltreeApp()
+        app.update()
+
+        self.assertTrue(app.tk.eval("after info").split(),
+                        "expected customtkinter to have timers pending")
+        app._cancel_pending_timers()
+        self.assertEqual(app.tk.eval("after info").split(), [],
+                         "a timer survived and will fire into destroyed widgets")
+        app.destroy()
+
+    def test_destroy_is_clean_after_a_scan(self):
+        # Cancelling must not break teardown: Misc.after_cancel would also
+        # delete the callback's Tcl command, making the owning widget fail to
+        # destroy itself.
+        app = FoltreeApp()
+        app.update()
+        app._set_editor("p/\n└── a.txt\n")
+        app.update()
+        app.destroy()  # must not raise
+
 
 if __name__ == "__main__":
     unittest.main()

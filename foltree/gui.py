@@ -143,10 +143,17 @@ class FoltreeApp(ctk.CTk):
         appearance.grid(row=0, column=4, padx=12, pady=10, sticky="e")
 
     def _build_sidebar(self) -> None:
-        side = ctk.CTkFrame(self, corner_radius=0, width=250)
-        side.grid(row=1, column=0, sticky="nsw")
-        side.grid_propagate(False)
-        side.grid_rowconfigure(9, weight=1)
+        container = ctk.CTkFrame(self, corner_radius=0, width=252)
+        container.grid(row=1, column=0, sticky="nsw")
+        container.grid_propagate(False)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        # The options scroll: there are enough of them now that they overflow
+        # at the minimum window height, which previously clipped the last one.
+        side = ctk.CTkScrollableFrame(container, fg_color="transparent", width=214)
+        side.grid(row=0, column=0, sticky="nsew")
+        side.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(side, text="Scan options", font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, columnspan=2, padx=14, pady=(14, 8), sticky="w")
@@ -172,22 +179,44 @@ class FoltreeApp(ctk.CTk):
         symlinks.grid(row=4, column=0, columnspan=2, padx=14, pady=6, sticky="w")
         _tooltip(symlinks, "Descend into symlinked folders. Loops are detected and stopped.")
 
-        ctk.CTkLabel(side, text="Ignore patterns", font=ctk.CTkFont(weight="bold")).grid(
-            row=5, column=0, columnspan=2, padx=14, pady=(16, 4), sticky="w")
-        ctk.CTkLabel(side, text="One per line, gitignore syntax", text_color=("gray45", "gray60"),
-                     font=ctk.CTkFont(size=11)).grid(row=6, column=0, columnspan=2, padx=14, sticky="w")
+        ctk.CTkLabel(side, text="Text options", font=ctk.CTkFont(weight="bold")).grid(
+            row=5, column=0, columnspan=2, padx=14, pady=(16, 6), sticky="w")
 
-        self.ignore_box = ctk.CTkTextbox(side, height=190, wrap="none")
-        self.ignore_box.grid(row=7, column=0, columnspan=2, padx=14, pady=(6, 6), sticky="ew")
+        self.dir_suffix_var = ctk.BooleanVar(value=True)
+        dir_suffix = ctk.CTkSwitch(side, text="Mark folders with /", variable=self.dir_suffix_var,
+                                   command=self._refresh_editor)
+        dir_suffix.grid(row=6, column=0, columnspan=2, padx=14, pady=6, sticky="w")
+        _tooltip(dir_suffix, "Off looks plainer, but an empty folder then reads the same\n"
+                             "as an extensionless file and is rebuilt using the setting below.")
+
+        ctk.CTkLabel(side, text="Bare names are").grid(row=7, column=0, padx=(14, 6), pady=6, sticky="w")
+        self.bare_names_var = ctk.StringVar(value="Folders")
+        bare_names = ctk.CTkOptionMenu(side, variable=self.bare_names_var, width=100,
+                                       values=["Folders", "Files"], command=self._refresh_editor)
+        bare_names.grid(row=7, column=1, padx=(0, 14), pady=6, sticky="e")
+        _tooltip(bare_names, "How to read a name with no slash, no extension and no children,\n"
+                             "such as 'assets'. Names like LICENSE or .github are recognised\n"
+                             "either way.")
+
+        ctk.CTkLabel(side, text="Ignore patterns", font=ctk.CTkFont(weight="bold")).grid(
+            row=8, column=0, columnspan=2, padx=14, pady=(16, 4), sticky="w")
+        ctk.CTkLabel(side, text="One per line, gitignore syntax", text_color=("gray45", "gray60"),
+                     font=ctk.CTkFont(size=11)).grid(row=9, column=0, columnspan=2, padx=14, sticky="w")
+
+        self.ignore_box = ctk.CTkTextbox(side, height=112, wrap="none")
+        self.ignore_box.grid(row=10, column=0, columnspan=2, padx=14, pady=(6, 6), sticky="ew")
         self.ignore_box.insert("1.0", "\n".join(DEFAULT_IGNORE) + "\n")
 
         reset = ctk.CTkButton(side, text="Reset patterns", height=28,
                               command=self._reset_patterns, **SECONDARY)
-        reset.grid(row=8, column=0, columnspan=2, padx=14, pady=(0, 12), sticky="ew")
+        reset.grid(row=11, column=0, columnspan=2, padx=14, pady=(0, 12), sticky="ew")
 
+        # Pinned outside the scroll area: it belongs to Create Folders, not to
+        # the scan options, and should stay reachable without scrolling.
         self.output_folder_var = ctk.BooleanVar(value=True)
-        auto_output = ctk.CTkCheckBox(side, text="Auto 'output' folder", variable=self.output_folder_var)
-        auto_output.grid(row=10, column=0, columnspan=2, padx=14, pady=(6, 14), sticky="w")
+        auto_output = ctk.CTkCheckBox(container, text="Auto 'output' folder",
+                                      variable=self.output_folder_var)
+        auto_output.grid(row=1, column=0, padx=14, pady=(8, 14), sticky="w")
         _tooltip(auto_output, "When creating folders, write into ./output/<timestamp>\ninstead of asking for a destination.")
 
     def _build_editor(self) -> None:
@@ -268,6 +297,16 @@ class FoltreeApp(ctk.CTk):
     def _current_format(self) -> str:
         return FORMAT_LABELS[self.format_var.get()]
 
+    def _current_bare_names(self) -> str:
+        return "folder" if self.bare_names_var.get() == "Folders" else "file"
+
+    def _render(self, tree: Node) -> str:
+        return render(tree, self._current_format(), stats=self.sizes_var.get(),
+                      dir_suffix=self.dir_suffix_var.get())
+
+    def _parse(self, text: str) -> Node:
+        return parse(text, "auto", bare_names=self._current_bare_names())
+
     def _editor_text(self) -> str:
         return self.text_box.get("1.0", "end").strip()
 
@@ -343,7 +382,7 @@ class FoltreeApp(ctk.CTk):
                 if kind == "scan":
                     tree, elapsed = payload
                     self.tree = tree
-                    self._set_editor(render(tree, self._current_format(), stats=self.sizes_var.get()))
+                    self._set_editor(self._render(tree))
                     self._status(
                         f"{tree.dir_count} folders, {tree.file_count} files"
                         + (f", {format_size(tree.total_size)}" if self.sizes_var.get() else "")
@@ -358,15 +397,33 @@ class FoltreeApp(ctk.CTk):
             pass
         self._drain_job = self.after(100, self._drain_results)
 
-    def destroy(self) -> None:
-        # Without this the repeating timer fires once more after the widgets
-        # are gone and Tk reports "invalid command name".
-        if self._drain_job is not None:
+    def _cancel_pending_timers(self) -> None:
+        """Cancel every scheduled `after` callback in this interpreter.
+
+        Our own result-drain timer is one of them, but customtkinter schedules
+        repeating callbacks too -- CTkTextbox re-arms a scrollbar check every
+        few milliseconds, and ScalingTracker polls for DPI changes. Left alone
+        they fire once more after the widgets are gone and Tk prints
+        "invalid command name ...<lambda>" for each.
+
+        This goes through the Tcl `after cancel` command rather than
+        `Misc.after_cancel`, which also deletes the callback's Tcl command --
+        the widget that registered it then fails to delete it during its own
+        teardown with "can't delete Tcl command".
+        """
+        try:
+            jobs = self.tk.eval("after info").split()
+        except Exception:
+            return
+        for job in jobs:
             try:
-                self.after_cancel(self._drain_job)
+                self.tk.call("after", "cancel", job)
             except Exception:
                 pass
-            self._drain_job = None
+
+    def destroy(self) -> None:
+        self._drain_job = None
+        self._cancel_pending_timers()
         super().destroy()
 
     # ------------------------------------------------------------------
@@ -383,12 +440,16 @@ class FoltreeApp(ctk.CTk):
         if not text:
             return
         try:
-            tree = parse(text, "auto")
+            tree = self._parse(text)
         except ParseError:
             if self.tree is None:
                 return
             tree = self.tree
-        self._set_editor(render(tree, self._current_format(), stats=self.sizes_var.get()))
+        self._set_editor(self._render(tree))
+
+    def _refresh_editor(self, *_args) -> None:
+        """Re-render after a text option changed. Same path as a format switch."""
+        self._on_format_change()
 
     def copy_to_clipboard(self) -> None:
         text = self._editor_text()
@@ -453,7 +514,7 @@ class FoltreeApp(ctk.CTk):
             return
 
         try:
-            tree = parse(text, "auto")
+            tree = self._parse(text)
         except ParseError as exc:
             messagebox.showerror("Could not read the structure", str(exc))
             return
