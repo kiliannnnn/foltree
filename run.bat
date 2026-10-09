@@ -7,8 +7,14 @@ REM   run.bat scan . -f md    -> passes arguments through to the CLI
 setlocal
 cd /d "%~dp0"
 
-where python >nul 2>nul
-if errorlevel 1 (
+REM Prefer the "py" launcher: a bare "python" is often the Microsoft Store
+REM stub, which exists on PATH but only opens the Store.
+set "PY="
+where py >nul 2>nul && set "PY=py -3"
+if not defined PY (
+    python -c "import sys" >nul 2>nul && set "PY=python"
+)
+if not defined PY (
     echo Python 3 not found. Install it from https://python.org and tick "Add to PATH".
     pause
     exit /b 1
@@ -16,7 +22,12 @@ if errorlevel 1 (
 
 if not exist ".venv" (
     echo First run: creating virtual environment in .venv ...
-    python -m venv .venv
+    %PY% -m venv .venv
+    if errorlevel 1 (
+        echo Could not create the virtual environment.
+        pause
+        exit /b 1
+    )
 )
 
 REM Reinstall only when requirements.txt is newer than the stamp file.

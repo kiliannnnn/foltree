@@ -17,7 +17,7 @@ from .render import render, FORMATS, format_size
 from .parse import parse, detect_format, ParseError
 from .build import build, BuildError, plan
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 __all__ = [
     "Node",

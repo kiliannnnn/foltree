@@ -44,20 +44,47 @@ Requires Python 3.9 or newer. On Linux the GUI also needs Tk:
 
 | | |
 |---|---|
-| **Select Folder** | scan a folder and show its structure |
+| **Select Folder…** | scan a folder and show its structure |
 | **Format** | switch between formats — your edits are converted, not lost |
 | **Max depth** | stop after N levels; deeper content is marked `...` |
 | **Show sizes & counts** | file sizes, plus per-folder file counts and totals |
 | **Respect .gitignore** | apply the scanned folder's own `.gitignore` on top of your patterns |
 | **Ignore patterns** | one per line, gitignore syntax |
-| **Copy / Save as…** | to the clipboard, or to `.txt` / `.md` / `.json` / `.yaml` |
-| **Create Folders** | build whatever is in the editor, after a confirmation showing the counts |
+| **Copy / Copy for README** | plain, or wrapped in a ```` ``` ```` block ready to paste into Markdown |
+| **Save as…** | to `.txt` / `.md` / `.json` / `.yaml` |
+| **Create Folders…** | pick a destination, preview exactly what will be made, optionally add a README |
 
-Shortcuts: `Ctrl+O` open · `F5` rescan · `Ctrl+S` save · `Ctrl+Shift+C` copy ·
-`Ctrl+Enter` create.
+Scan options apply as soon as you change them. If you have edited the text,
+nothing is overwritten: the status bar tells you to press `F5` instead, and
+`Ctrl+Z` undoes a rescan or a Clear anyway.
 
-Scanning runs on a background thread, so large folders no longer freeze the
+While you type or paste, the status bar shows how the text is understood
+(*Reads as Tree: 3 folders, 7 files*), so you know before building. The
+create dialog's preview marks every folder with a trailing `/`, which is where
+a guess about an extensionless name such as `bin` or `LICENSE` would show.
+
+The app remembers your format, options, ignore patterns, theme, window size,
+last folder and last destination.
+
+Shortcuts (`⌘` instead of `Ctrl` on macOS): `Ctrl+O` open · `F5` / `Ctrl+R`
+rescan · `Ctrl+S` save · `Ctrl+Shift+C` copy · `Ctrl+Enter` create ·
+`Ctrl+A` select all · `Ctrl+Z` undo.
+
+Scanning runs on a background thread, so large folders never freeze the
 window.
+
+### Paste anything
+
+The text side is built for structures as people actually paste them:
+
+- **A whole chat answer.** Only the first ```` ``` ```` code block is read, so the
+  prose around it does not turn into folders.
+- **Comments.** `main.py  # entry point`, `utils/ // helpers`, `docs ← here` —
+  the comment is dropped (`C#` and `issue#12.md` are kept).
+- **Any tree style.** `├──`, `├─`, `|--`, `+---`, guides of any width, the
+  output of `tree` (including its footer) and Windows `tree /F` / `tree /A`.
+- **Path lists**, one per line, from `find .` or `git ls-files`.
+- **Folder emoji** such as `📁 src` mark a folder and are not part of the name.
 
 ## ⌨️ CLI
 
@@ -78,9 +105,20 @@ foltree build -i structure.txt -o ./scaffold --dry-run   # preview only
 
 ### Formats
 
-`indented`, `tree`, `ascii`, `markdown`, `json`, `yaml` — every one of them
-round-trips, so you can scan in one format and build from another. `build`
-auto-detects the input format unless you pass `-f`.
+`indented`, `tree`, `ascii`, `markdown`, `json`, `yaml`, `paths` — every one
+of them round-trips, so you can scan in one format and build from another.
+`build` auto-detects the input format unless you pass `-f`. Short names work
+too: `md`, `yml`, `txt`.
+
+```bash
+git ls-files | foltree build -o ../skeleton   # an empty copy of a repo's layout
+foltree scan . -f paths | grep test            # one path per line, for scripts
+```
+
+`build` creates every entry it is given, including names like `.env` or
+`build/` that `scan` skips by default; pass `--ignore` to leave some out.
+`--readme` writes the README inside the new top folder and never replaces a
+README that already has content.
 
 ### Ignore patterns
 
@@ -100,6 +138,7 @@ foltree/
 │   ├── parse.py     # text -> tree
 │   ├── build.py     # tree -> filesystem
 │   ├── cli.py       # command line interface
+│   ├── settings.py  # remembered app preferences
 │   └── gui.py       # desktop app
 ├── tests/
 ├── run.sh
@@ -113,8 +152,20 @@ reliable — the old version parsed and rendered text directly.
 python -m unittest discover -s tests -t .
 ```
 
-61 tests, standard library only. The GUI tests skip themselves when no display
-is available.
+Standard library only. The GUI tests skip themselves when no display is
+available; to run them headless on Linux use
+`xvfb-run python -m unittest discover -s tests -t .`.
+
+## 🔁 Upgrading from 3.0
+
+- **The editor starts empty.** The example is a hint drawn over it, so there
+  is nothing to delete before pasting.
+- **"Auto 'output' folder" is gone.** *Create Folders…* asks where to build
+  (defaulting to the last place you used) and shows a preview first.
+- **`foltree build` no longer applies the default ignore list.** A structure
+  that lists `.env` or `vendor/` now gets them; use `--ignore` to skip things.
+- **`--readme` writes inside the new top folder**, next to what it describes.
+- Folder counts on parsed text no longer claim a size of `0 B`.
 
 ## 🔁 Upgrading from v2
 
@@ -138,6 +189,9 @@ directories, `.github` being created as a file, and structures containing `..`
 being able to write outside the output folder.
 
 ## 💡 Ideas
+
+- Drag and drop a folder onto the window
+- Optional file contents (e.g. `main.py: print("hi")`) when building
 
 - Watch a folder and keep a README section in sync
 - Structure diffing (what changed since last scan)
