@@ -97,6 +97,10 @@ class FoltreeApp(ctk.CTk):
         self._build_layout()
         self._bind_shortcuts()
         self._drain_job: Optional[str] = self.after(100, self._drain_results)
+        # Some window managers (notably macOS) paint nothing until the first
+        # idle pass; force one and raise the window so it is not left blank.
+        self.update_idletasks()
+        self.lift()
 
     # ------------------------------------------------------------------
     # Layout
@@ -508,7 +512,25 @@ class FoltreeApp(ctk.CTk):
             pass  # opening a file manager is a nicety, never a failure
 
 
+def _check_tk() -> None:
+    """Refuse to open a window Tk cannot draw.
+
+    Tk 8.5 -- what Apple's bundled Python links against -- opens CustomTkinter
+    windows as a solid black rectangle with no error, so say what is wrong
+    instead of leaving a blank window.
+    """
+    import tkinter
+
+    if tkinter.TkVersion < 8.6:
+        raise SystemExit(
+            f"Foltree needs Tk 8.6 or newer, but this Python uses Tk {tkinter.TkVersion}.\n"
+            "That version shows a black window. Install Python from python.org "
+            "(or `brew install python-tk`) and run again with PYTHON=/path/to/python3 ./run.sh"
+        )
+
+
 def main() -> None:
+    _check_tk()
     ctk.set_appearance_mode("System")
     ctk.set_default_color_theme("blue")
     FoltreeApp().mainloop()
