@@ -42,7 +42,12 @@ def _label(node: Node, stats: bool) -> str:
         files = node.file_count
         if not files:
             return name
-        return f"{name} ({files} files, {format_size(node.total_size)})"
+        details = f"{files} file" + ("" if files == 1 else "s")
+        # Text that was parsed rather than scanned has no sizes; "0 B" would
+        # be a lie, so only the count is shown then.
+        if any(n.size is not None for n in node.walk() if not n.is_dir):
+            details += f", {format_size(node.total_size)}"
+        return f"{name} ({details})"
     if node.size is None:
         return name
     return f"{name} ({format_size(node.size)})"
@@ -67,7 +72,12 @@ def render_indented(root: Node, stats: bool = False, indent: int = 4) -> str:
         if node.truncated:
             lines.append(pad * (depth + 1) + TRUNCATED_MARK)
 
-    emit(root, 0)
+    if root.name:
+        emit(root, 0)
+    else:
+        # An unnamed root is a fragment: its entries sit at the left edge.
+        for child in root.children:
+            emit(child, 0)
     return "\n".join(lines)
 
 
@@ -77,7 +87,7 @@ def render_indented(root: Node, stats: bool = False, indent: int = 4) -> str:
 
 def _render_tree(root: Node, glyphs, stats: bool) -> str:
     branch, last_branch, guide, blank = glyphs
-    lines = [_label(root, stats) + _annotate(root)]
+    lines = [_label(root, stats) + _annotate(root)] if root.name else []
 
     def emit(node: Node, prefix: str) -> None:
         entries: List[Optional[Node]] = list(node.children)
@@ -125,7 +135,40 @@ def render_markdown(root: Node, stats: bool = False) -> str:
         if node.truncated:
             lines.append(f"{'  ' * (depth + 1)}- {TRUNCATED_MARK}")
 
-    emit(root, 0)
+    if root.name:
+        emit(root, 0)
+    else:
+        for child in root.children:
+            emit(child, 0)
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Path list
+# --------------------------------------------------------------------------
+
+def render_paths(root: Node, stats: bool = False) -> str:
+    """One full path per line, the shape `find` and `git ls-files` print.
+
+    Handy for scripts (`grep`, `xargs`) and for pasting into tools that
+    expect a flat list.
+    """
+    lines: List[str] = []
+
+    def emit(node: Node, prefix: str) -> None:
+        lines.append(prefix + _label(node, stats) + _annotate(node))
+        if node.is_dir:
+            inner = prefix + node.name + "/"
+            for child in node.children:
+                emit(child, inner)
+            if node.truncated:
+                lines.append(inner + TRUNCATED_MARK)
+
+    if root.name:
+        emit(root, "")
+    else:
+        for child in root.children:
+            emit(child, "")
     return "\n".join(lines)
 
 
@@ -168,7 +211,9 @@ def render_yaml(root: Node, stats: bool = False) -> str:
         if node.truncated:
             lines.append(f"{pad}- '{TRUNCATED_MARK}'")
 
-    if root.children or root.truncated:
+    if not root.name:
+        emit_children(root, 0)  # a fragment is a top-level list
+    elif root.children or root.truncated:
         lines.append(f"{_yaml_key(root, stats)}:")
         emit_children(root, 2)
     else:
@@ -201,6 +246,7 @@ FORMATS: Dict[str, Callable[..., str]] = {
     "markdown": render_markdown,
     "json": render_json,
     "yaml": render_yaml,
+    "paths": render_paths,
 }
 
 # Human-facing labels used by the GUI, in menu order.
@@ -211,6 +257,7 @@ FORMAT_LABELS = {
     "Markdown": "markdown",
     "JSON": "json",
     "YAML": "yaml",
+    "Path list": "paths",
 }
 
 # Names accepted from older versions / the CLI, mapped onto current formats.
@@ -221,6 +268,9 @@ ALIASES = {
     "md": "markdown",
     "yml": "yaml",
     "txt": "indented",
+    "path": "paths",
+    "list": "paths",
+    "find": "paths",
 }
 
 

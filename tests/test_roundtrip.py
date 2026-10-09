@@ -4,7 +4,7 @@ from foltree.node import Node
 from foltree.parse import detect_format, parse
 from foltree.render import FORMATS, render
 
-TEXT_FORMATS = ["indented", "tree", "ascii", "markdown", "json", "yaml"]
+TEXT_FORMATS = ["indented", "tree", "ascii", "markdown", "json", "yaml", "paths"]
 
 
 def sample_tree():
