@@ -24,6 +24,7 @@ import traceback
 from typing import Optional
 
 import customtkinter as ctk
+import tkinter as tk
 from tkinter import filedialog, messagebox
 
 try:  # optional, the app works fine without it
@@ -362,7 +363,16 @@ class FoltreeApp(ctk.CTk):
             pass
         self._drain_job = self.after(100, self._drain_results)
 
+    def report_callback_exception(self, exc, val, tb) -> None:
+        # While the window is closing, customtkinter widgets still receive
+        # <Configure> events after their canvases are gone; those TclErrors
+        # are harmless noise, so only report errors that happen while running.
+        if getattr(self, "_closing", False) and isinstance(val, tk.TclError):
+            return
+        super().report_callback_exception(exc, val, tb)
+
     def destroy(self) -> None:
+        self._closing = True
         # Without this the repeating timer fires once more after the widgets
         # are gone and Tk reports "invalid command name".
         if self._drain_job is not None:
