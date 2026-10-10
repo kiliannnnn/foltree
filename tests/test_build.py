@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from foltree.build import BuildError, build, plan
+from foltree.build import build, plan
 from foltree.ignore import IgnoreRules
 from foltree.parse import parse
 from foltree.render import render

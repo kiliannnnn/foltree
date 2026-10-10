@@ -169,9 +169,10 @@ available; to run them headless on Linux use
 
 ## 🔁 Upgrading from v2
 
-Everything still works, but a few behaviours changed on purpose:
+A few behaviours changed on purpose:
 
-- **`python FoltreeGUI.py` still runs**, it now forwards to the package.
+- **`FoltreeGUI.py` is gone.** Launch with `run.sh` / `run.bat`, `foltree`, or
+  `python -m foltree` instead.
 - **Ignore patterns are gitignore syntax, not substrings.** `.git` no longer
   also hides `.gitignore`, and `dist` no longer hides `distribution`.
 - **"Clean Tree" is now just "Tree".** The old "Tree" format emitted `├──` for
@@ -192,7 +193,6 @@ being able to write outside the output folder.
 
 - Drag and drop a folder onto the window
 - Optional file contents (e.g. `main.py: print("hi")`) when building
-
 - Watch a folder and keep a README section in sync
 - Structure diffing (what changed since last scan)
 - Templates for common project layouts

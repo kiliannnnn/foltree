@@ -1,4 +1,2 @@
 customtkinter>=5.2.2
 CTkToolTip>=0.8
-darkdetect>=0.8.0
-packaging>=25.0
