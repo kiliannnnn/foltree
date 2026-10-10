@@ -1,0 +1,75 @@
+name: app
+
+# Builds the standalone desktop app for Windows, macOS and Linux and runs each
+# bundle once to prove it opens. The archives are kept as workflow artifacts
+# (Actions run page -> Artifacts), ready to upload to the store; nothing is
+# published publicly from here.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest Ubuntu runner keeps the Linux build compatible with older
+        # glibc versions; macos-latest is Apple Silicon.
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk and xvfb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb python3-tk
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller -r requirements.txt
+
+      - name: Build
+        run: python packaging/build.py
+
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        env:
+          FOLTREE_SMOKE_TEST: "1"
+        run: xvfb-run -a dist/Foltree/Foltree
+
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        env:
+          FOLTREE_SMOKE_TEST: "1"
+        run: dist/Foltree.app/Contents/MacOS/Foltree
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          FOLTREE_SMOKE_TEST: "1"
+        # A windowed exe detaches from the console, so wait for it explicitly.
+        run: |
+          $p = Start-Process -FilePath dist\Foltree\Foltree.exe -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "bundle exited with $($p.ExitCode)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foltree-${{ runner.os }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error

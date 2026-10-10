@@ -140,6 +140,7 @@ foltree/
 │   ├── cli.py       # command line interface
 │   ├── settings.py  # remembered app preferences
 │   └── gui.py       # desktop app
+├── packaging/       # standalone app build
 ├── tests/
 ├── run.sh
 └── run.bat
@@ -155,6 +156,22 @@ python -m unittest discover -s tests -t .
 Standard library only. The GUI tests skip themselves when no display is
 available; to run them headless on Linux use
 `xvfb-run python -m unittest discover -s tests -t .`.
+
+### Standalone app
+
+`packaging/build.py` bundles the desktop app with its own Python and Tk, so
+whoever downloads it does not need either:
+
+```bash
+pip install pyinstaller -r requirements.txt
+python packaging/build.py      # -> dist/Foltree-<version>-<platform>.zip / .tar.gz
+```
+
+PyInstaller only builds for the platform it runs on. Push a `v*` tag (or run
+the **app** workflow by hand) to build Windows, macOS and Linux in CI; each
+bundle is opened once as a smoke test and the archives are attached to the run
+as artifacts. Drop `icon.ico` / `icon.icns` into `packaging/` to give the app
+an icon.
 
 ## 🔁 Upgrading from 3.0
 
